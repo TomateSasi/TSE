@@ -14,7 +14,7 @@ A client-side Fabric mod for Minecraft that plays custom sounds and shows on-scr
 1. Install [Fabric Loader](https://fabricmc.net/use/) for Minecraft 26.1.2.
 2. Download [Fabric API](https://modrinth.com/mod/fabric-api) and place it in your `mods` folder.
 3. Drop the TSE mod jar into your `mods` folder.
-4. Launch the game and run **`/tse`** o open the settings menu.
+4. Launch the game and run **`/tse`** to open the settings menu.
 
 ## Features
 
@@ -58,7 +58,7 @@ Save and load named snapshots of which rules are enabled:
 - Profiles are stored in `config/tse_profiles.json`.
 
 ### 🎵 Sounds
-- Two sounds are **built into the mod jar** out of the box (`yippee`, `Anvil`) so it works with zero setup.
+- Two sounds are **built into the mod jar** out of the box (`Meow`, `yippee`, `Anvil`) so it works with zero setup.
 - Drop your own `.wav`, `.ogg`, or `.mp3` files into `config/tse_sounds/` and they'll automatically appear in every sound picker in the GUI.
 - Supports WAV, OGG/Vorbis, and MP3 decoding (via bundled `tritonus`, `vorbisspi`, `jorbis`, and `mp3spi` libraries).
 - Per-rule **volume control**.
