@@ -34,8 +34,8 @@ public class PreciseSlider extends AbstractWidget {
     public PreciseSlider(int x, int y, int width, double initial, double min, double max,
                          double step, Formatter formatter, DoubleConsumer onChange, String label) {
         super(x, y, width, 16, Component.empty());
-        this.value = clamp(initial);
         this.min = min; this.max = max; this.step = step;
+        this.value = clamp(initial);
         this.formatter = formatter;
         this.onChange = onChange;
         this.label = label;
