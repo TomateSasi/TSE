@@ -32,6 +32,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public class tse implements ClientModInitializer {
     private final ScheduledExecutorService scheduler =
             Executors.newSingleThreadScheduledExecutor();
+    private final AtomicBoolean awaitingLocrawResponse = new AtomicBoolean(false);
 
     private static final File CONFIG_FILE = new File(
             Minecraft.getInstance().gameDirectory, "config/tse_config.json");
@@ -114,6 +115,23 @@ public class tse implements ClientModInitializer {
                 (msg, signed, sender, params, ts) -> handleChatMessage(msg.getString(), false));
         ClientReceiveMessageEvents.GAME.register(
                 (msg, overlay) -> { if (!overlay) handleChatMessage(msg.getString(), true); });
+        ClientReceiveMessageEvents.ALLOW_GAME.register((msg, overlay) -> {
+            String text = msg.getString();
+            if (text.contains("Sending to server")) {
+                awaitingLocrawResponse.set(true);
+                scheduler.schedule(() -> Minecraft.getInstance().execute(() -> {
+                    if (Minecraft.getInstance().player != null)
+                        Minecraft.getInstance().player.connection.sendCommand("locraw");
+                }), 3, TimeUnit.SECONDS);
+            }
+            if (awaitingLocrawResponse.get() && text.startsWith("{") && text.contains("\"mode\":\"")) {
+                try { currentLocation = text.split("\"mode\":\"")[1].split("\"")[0]; }
+                catch (Exception ignored) {}
+                awaitingLocrawResponse.set(false);
+                return false;
+            }
+            return true;
+        });
 
         ClientTickEvents.END_CLIENT_TICK.register(this::onTick);
         HudElementRegistry.attachElementAfter(
