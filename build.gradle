@@ -9,7 +9,7 @@ loom {
 }
 
 group = 'de.tomate'
-version = '2.0'
+version = '2.0-26.2'
 
 repositories {
     maven { url 'https://maven.fabricmc.net/' }

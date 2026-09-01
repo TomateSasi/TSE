@@ -35,10 +35,16 @@ public class TSEScreen extends Screen {
     };
     private static final String[] SB_LOCATIONS = {
             "Any", "Private Island", "Hub", "The Farming Islands", "The Park",
-            "Spider's Den", "The End", "Crimson Isle", "Blazing Fortress", "Gold Mine",
-            "Deep Caverns", "Dwarven Mines", "Crystal Hollows", "Dungeon Hub",
-            "The Catacombs", "Kuudra's Hollow", "The Rift", "Garden",
-            "Jerry's Workshop", "Dark Auction", "Howling Cave", "Void Sepulture"
+            "Galatea", "Torrhus Canyon", "Spider's Den", "The End", "Crimson Isle",
+            "Kuudra", "Gold Mine", "Deep Caverns", "Dwarven Mines", "Crystal Hollows",
+            "Backwater Bayou", "Lotus Atoll", "Dungeon Hub", "The Catacombs", "The Rift",
+            "Garden", "Jerry's Workshop", "Dark Auction"
+    };
+    private static final String[] SB_LOCATION_KEYS = {
+            "", "dynamic", "hub", "farming_1", "foraging_1", "foraging_2",
+            "foraging_3", "combat_1", "combat_3", "crimson_isle", "kuudra", "mining_1",
+            "mining_2", "mining_3", "crystal_hollows", "fishing_1", "lotus_atoll",
+            "dungeon_hub", "dungeon", "rift", "garden", "winter_island", "dark_auction"
     };
     private static final String DISCORD_URL = "https://discord.gg/R3xPtspRtE";
     private static final Identifier LOGO_TEXTURE = Identifier.fromNamespaceAndPath("tse", "textures/gui/logo.png");
@@ -257,12 +263,11 @@ public class TSEScreen extends Screen {
         x += 96;
 
         int locIdx = 0;
-        for (int i = 0; i < SB_LOCATIONS.length; i++)
-            if (SB_LOCATIONS[i].equalsIgnoreCase(rule.locationKeyword)) { locIdx = i; break; }
+        for (int i = 0; i < SB_LOCATION_KEYS.length; i++)
+            if (SB_LOCATION_KEYS[i].equalsIgnoreCase(rule.locationKeyword)) { locIdx = i; break; }
         add(new CycleButton(x, cursorY, 120, 18, Arrays.asList(SB_LOCATIONS), locIdx, i -> {
-            rule.locationKeyword = i == 0 ? "" : SB_LOCATIONS[i]; tse.saveConfig();
+            rule.locationKeyword = i == 0 ? "" : SB_LOCATION_KEYS[i]; tse.saveConfig();
         }));
-
         add(deleteButton(left + w - 44, cursorY, 44, 18, () -> {
             tse.pushUndo(); cat.rules.remove(rule); tse.saveConfig(); rebuildContent();
         }));
