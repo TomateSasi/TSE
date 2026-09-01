@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "id": "tse",
+  "version": "2.0",
+  "name": "TSE Mod",
+  "description": "Item/location sound triggers, chat triggers, and a Voidgloom Seraph sneak reminder \u2014 with an in-game settings GUI (/tse) built on Minecraft's own renderer.",
+  "icon": "icon.png",
+  "entrypoints": {
+    "client": [
+      "com.example.tse"
+    ]
+  },
+  "depends": {
+    "fabricloader": ">=0.19.3",
+    "minecraft": "26.2",
+    "fabric-api": "*"
+  }
+}
