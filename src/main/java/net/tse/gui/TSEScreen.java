@@ -44,8 +44,9 @@ public class TSEScreen extends Screen {
             "", "dynamic", "hub", "farming_1", "foraging_1", "foraging_2",
             "foraging_3", "combat_1", "combat_3", "crimson_isle", "kuudra", "mining_1",
             "mining_2", "mining_3", "crystal_hollows", "fishing_1", "lotus_atoll",
-            "dungeon_hub", "dungeon", "rift", "garden", "winter_island", "dark_auction"
+            "dungeon_hub", "dungeon", "rift", "garden", "winter", "dark_auction"
     };
+
     private static final String DISCORD_URL = "https://discord.gg/R3xPtspRtE";
     private static final Identifier LOGO_TEXTURE = Identifier.fromNamespaceAndPath("tse", "textures/gui/logo.png");
     private static final int LOGO_TEX_W = 1024, LOGO_TEX_H = 380;
@@ -60,7 +61,6 @@ public class TSEScreen extends Screen {
 
     private int winX, winY, winW, winH;
     private int sideW = 122;
-
     private static final int SLIDER_KNOB_MARGIN = 8;
     private int contentX, contentY, contentW, contentH;
 
@@ -72,6 +72,52 @@ public class TSEScreen extends Screen {
     private final EditBox newProfileName;
 
     private ModConfig.SoundRule capturingRule = null;
+
+    private SoundNode soundTreeRoot;
+    private SoundNode currentMenuFolder;
+    private java.util.function.Consumer<String> currentSoundCallback;
+    private int soundMenuX, soundMenuY;
+    private int soundMenuScroll = 0;
+
+    private static class SoundNode {
+        String name;
+        String fullPath;
+        boolean isFolder;
+        SoundNode parent;
+        List<SoundNode> children = new ArrayList<>();
+    }
+
+    private void openSoundMenu(int x, int y, java.util.function.Consumer<String> callback) {
+        soundTreeRoot = new SoundNode();
+        soundTreeRoot.name = "Root";
+        soundTreeRoot.isFolder = true;
+        for (String path : tse.availableSounds) {
+            String[] parts = path.split("/");
+            SoundNode current = soundTreeRoot;
+            for (int i = 0; i < parts.length; i++) {
+                String part = parts[i];
+                boolean isLast = (i == parts.length - 1);
+                SoundNode child = null;
+                for (SoundNode n : current.children) {
+                    if (n.name.equals(part)) { child = n; break; }
+                }
+                if (child == null) {
+                    child = new SoundNode();
+                    child.name = part;
+                    child.isFolder = !isLast;
+                    child.fullPath = isLast ? path : "";
+                    child.parent = current;
+                    current.children.add(child);
+                }
+                current = child;
+            }
+        }
+        currentMenuFolder = soundTreeRoot;
+        currentSoundCallback = callback;
+        soundMenuX = x;
+        soundMenuY = y;
+        soundMenuScroll = 0;
+    }
 
     public TSEScreen() {
         super(Component.literal("TSE"));
@@ -268,6 +314,14 @@ public class TSEScreen extends Screen {
         add(new CycleButton(x, cursorY, 120, 18, Arrays.asList(SB_LOCATIONS), locIdx, i -> {
             rule.locationKeyword = i == 0 ? "" : SB_LOCATION_KEYS[i]; tse.saveConfig();
         }));
+
+        add(FlatButton.builder(Component.literal("Copy"), b -> {
+            tse.pushUndo();
+            cat.rules.add(cat.rules.indexOf(rule) + 1, rule.copy());
+            tse.saveConfig();
+            rebuildContent();
+        }).dimensions(left + w - 90, cursorY, 42, 18).build());
+
         add(deleteButton(left + w - 44, cursorY, 44, 18, () -> {
             tse.pushUndo(); cat.rules.remove(rule); tse.saveConfig(); rebuildContent();
         }));
@@ -297,9 +351,16 @@ public class TSEScreen extends Screen {
                 .dimensions(x, cursorY, 120, 18).build());
         x += 124;
 
-        List<String> sounds = tse.availableSounds.isEmpty() ? List.of("Meow") : tse.availableSounds;
-        int sIdx = Math.max(0, sounds.indexOf(rule.soundFile));
-        add(new CycleButton(x, cursorY, 120, 18, sounds, sIdx, i -> { rule.soundFile = sounds.get(i); tse.saveConfig(); }));
+        String disp = rule.soundFile;
+        if (disp.contains("/")) disp = disp.substring(disp.lastIndexOf("/") + 1);
+        final int menuX = x;
+        final int menuY = cursorY + 20;
+        final String menuDisp = disp;
+        add(FlatButton.builder(Component.literal(menuDisp), b -> openSoundMenu(menuX, menuY, s -> {
+            rule.soundFile = s;
+            tse.saveConfig();
+            rebuildContent();
+        })).dimensions(x, cursorY, 120, 18).build());
         x += 124;
 
         add(FlatButton.builder(Component.literal("Play"), b -> tse.playSound(rule.soundFile, rule.volume))
@@ -312,7 +373,7 @@ public class TSEScreen extends Screen {
                 "Volume"));
         x += 140;
         add(FlatButton.builder(Component.literal("Overlay Settings..."), b ->
-                        Minecraft.getInstance().gui.setScreen(new RuleDetailScreen(this, rule)))
+                        Minecraft.getInstance().gui.setScreen(new net.tse.gui.RuleDetailScreen(this, rule)))
                 .dimensions(x, cursorY, w - (x - left), 18).build());
 
         cursorY += rowH + 10;
@@ -416,6 +477,13 @@ public class TSEScreen extends Screen {
         kw.setResponder(s -> { rule.messageKeyword = s; tse.saveConfig(); });
         add(kw);
 
+        add(FlatButton.builder(Component.literal("Copy"), b -> {
+            tse.pushUndo();
+            cat.rules.add(cat.rules.indexOf(rule) + 1, rule.copy());
+            tse.saveConfig();
+            rebuildContent();
+        }).dimensions(left + contentW - 14 - 90, cursorY, 42, 18).build());
+
         add(deleteButton(left + contentW - 14 - 44, cursorY, 44, 18, () -> {
             tse.pushUndo(); cat.rules.remove(rule); tse.saveConfig(); rebuildContent();
         }));
@@ -433,9 +501,16 @@ public class TSEScreen extends Screen {
         cursorY += rowH + 4;
 
         x = left;
-        List<String> sounds = tse.availableSounds.isEmpty() ? List.of("Meow") : tse.availableSounds;
-        int sIdx = Math.max(0, sounds.indexOf(rule.soundFile));
-        add(new CycleButton(x, cursorY, 120, 18, sounds, sIdx, i -> { rule.soundFile = sounds.get(i); tse.saveConfig(); }));
+        String disp = rule.soundFile;
+        if (disp.contains("/")) disp = disp.substring(disp.lastIndexOf("/") + 1);
+        final int menuX = x;
+        final int menuY = cursorY + 20;
+        final String menuDisp = disp;
+        add(FlatButton.builder(Component.literal(menuDisp), b -> openSoundMenu(menuX, menuY, s -> {
+            rule.soundFile = s;
+            tse.saveConfig();
+            rebuildContent();
+        })).dimensions(x, cursorY, 120, 18).build());
         x += 124;
         add(FlatButton.builder(Component.literal("Play"), b -> tse.playSound(rule.soundFile, rule.volume))
                 .dimensions(x, cursorY, 36, 18).build());
@@ -474,9 +549,16 @@ public class TSEScreen extends Screen {
         cursorY += 30;
 
         addSection("Reminder Sound");
-        List<String> sounds = tse.availableSounds.isEmpty() ? List.of("Meow") : tse.availableSounds;
-        int sIdx = Math.max(0, sounds.indexOf(v.reminderSound));
-        add(new CycleButton(left, cursorY, 120, 18, sounds, sIdx, i -> { v.reminderSound = sounds.get(i); tse.saveConfig(); }));
+        String disp = v.reminderSound;
+        if (disp.contains("/")) disp = disp.substring(disp.lastIndexOf("/") + 1);
+        final int menuX = left;
+        final int menuY = cursorY + 20;
+        final String menuDisp = disp;
+        add(FlatButton.builder(Component.literal(menuDisp), b -> openSoundMenu(menuX, menuY, s -> {
+            v.reminderSound = s;
+            tse.saveConfig();
+            rebuildContent();
+        })).dimensions(left, cursorY, 120, 18).build());
         add(FlatButton.builder(Component.literal("Play"), b -> tse.playSound(v.reminderSound, v.reminderVolume))
                 .dimensions(left + 124, cursorY, 36, 18).build());
         cursorY += 22 + 12;
@@ -713,6 +795,35 @@ public class TSEScreen extends Screen {
             context.centeredText(font, "Press a key or click to bind...",
                     winX + winW / 2, winY + winH - 16, 0xFFFFAA33);
         }
+
+        if (currentMenuFolder != null) {
+            int mw = 160;
+            int mh = 140;
+            context.fill(soundMenuX, soundMenuY, soundMenuX + mw, soundMenuY + mh, MCTheme.PANEL_BG);
+            context.outline(soundMenuX, soundMenuY, mw, mh, MCTheme.CARD_BORDER);
+            int drawY = soundMenuY + 4;
+            if (currentMenuFolder.parent != null) {
+                if (mouseX >= soundMenuX && mouseX <= soundMenuX + mw && mouseY >= drawY && mouseY < drawY + 14) {
+                    context.fill(soundMenuX + 1, drawY, soundMenuX + mw - 1, drawY + 14, MCTheme.BUTTON_BG_HOVER);
+                }
+                MCTheme.drawTextHD(context, font, "<- Back", soundMenuX + 6, drawY + 3, 0xFFFFAA00, false);
+                drawY += 14;
+            }
+            context.enableScissor(soundMenuX, drawY, soundMenuX + mw, soundMenuY + mh - 4);
+            int itemY = drawY - soundMenuScroll;
+            for (SoundNode child : currentMenuFolder.children) {
+                if (itemY > soundMenuY - 14 && itemY < soundMenuY + mh) {
+                    if (mouseX >= soundMenuX && mouseX <= soundMenuX + mw && mouseY >= itemY && mouseY < itemY + 14 && mouseY >= drawY && mouseY < soundMenuY + mh - 4) {
+                        context.fill(soundMenuX + 1, itemY, soundMenuX + mw - 1, itemY + 14, MCTheme.BUTTON_BG_HOVER);
+                    }
+                    String label = (child.isFolder ? "> " : "") + child.name;
+                    int color = child.isFolder ? MCTheme.accent(255) : MCTheme.TEXT;
+                    MCTheme.drawTextHD(context, font, label, soundMenuX + 6, itemY + 3, color, false);
+                }
+                itemY += 14;
+            }
+            context.disableScissor();
+        }
     }
 
     @Override
@@ -723,6 +834,40 @@ public class TSEScreen extends Screen {
     @Override
     public boolean mouseClicked(MouseButtonEvent click, boolean doubleClick) {
         double mouseX = click.x(), mouseY = click.y();
+
+        if (currentMenuFolder != null) {
+            int mw = 160;
+            int mh = 140;
+            if (mouseX >= soundMenuX && mouseX <= soundMenuX + mw && mouseY >= soundMenuY && mouseY <= soundMenuY + mh) {
+                int clickY = (int) mouseY;
+                int drawY = soundMenuY + 4;
+                if (currentMenuFolder.parent != null) {
+                    if (clickY >= drawY && clickY < drawY + 14) {
+                        currentMenuFolder = currentMenuFolder.parent;
+                        soundMenuScroll = 0;
+                        return true;
+                    }
+                    drawY += 14;
+                }
+                int index = (clickY - drawY + soundMenuScroll) / 14;
+                if (index >= 0 && index < currentMenuFolder.children.size()) {
+                    SoundNode clicked = currentMenuFolder.children.get(index);
+                    if (clicked.isFolder) {
+                        currentMenuFolder = clicked;
+                        soundMenuScroll = 0;
+                    } else {
+                        currentSoundCallback.accept(clicked.fullPath);
+                        currentMenuFolder = null;
+                        rebuildContent();
+                    }
+                }
+                return true;
+            } else {
+                currentMenuFolder = null;
+                return true;
+            }
+        }
+
         int button = click.button();
         if (capturingRule != null) {
             if (button >= 0 && button <= 2) {
@@ -781,6 +926,15 @@ public class TSEScreen extends Screen {
 
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double horizontalAmount, double verticalAmount) {
+        if (currentMenuFolder != null) {
+            int mw = 160;
+            int mh = 140;
+            if (mouseX >= soundMenuX && mouseX <= soundMenuX + mw && mouseY >= soundMenuY && mouseY <= soundMenuY + mh) {
+                soundMenuScroll = Math.max(0, soundMenuScroll - (int)(verticalAmount * 14));
+                return true;
+            }
+        }
+
         for (AbstractWidget w : contentWidgets) {
             if (w instanceof CycleButton cb && cb.isOpen() && cb.isPointInList(mouseX, mouseY)) {
                 cb.scrollList((int) Math.signum(verticalAmount));

@@ -30,28 +30,26 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 public class tse implements ClientModInitializer {
-    private final ScheduledExecutorService scheduler =
-            Executors.newSingleThreadScheduledExecutor();
+    private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
     private final AtomicBoolean awaitingLocrawResponse = new AtomicBoolean(false);
 
-    private static final File CONFIG_FILE = new File(
-            Minecraft.getInstance().gameDirectory, "config/tse_config.json");
-    public static final File SOUNDS_DIR = new File(
-            Minecraft.getInstance().gameDirectory, "config/tse_sounds");
+    private static final File CONFIG_FILE = new File(Minecraft.getInstance().gameDirectory, "config/tse_config.json");
+    public static final File SOUNDS_DIR = new File(Minecraft.getInstance().gameDirectory, "config/tse_sounds");
 
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
 
-    public static ModConfig    config          = new ModConfig();
-    public static String       currentLocation = "none";
+    public static ModConfig config = new ModConfig();
+    public static String currentLocation = "none";
     public static List<String> availableSounds = new ArrayList<>();
+    public static final List<String> recentMessages = new ArrayList<>();
 
     private static final Deque<ModConfig> undoStack = new ArrayDeque<>();
     private static final int MAX_UNDO = 20;
 
-    private boolean wasUsingBefore  = false;
+    private boolean wasUsingBefore = false;
     private boolean wasAttackBefore = false;
     private boolean wasMiddleBefore = false;
-    private final Set<Integer> pressedKeys     = new HashSet<>();
+    private final Set<Integer> pressedKeys = new HashSet<>();
     private final Set<Integer> prevPressedKeys = new HashSet<>();
 
     public static boolean voidgloomSneakActive = false;
@@ -59,8 +57,8 @@ public class tse implements ClientModInitializer {
     private static final AtomicBoolean voidgloomLoopRunning = new AtomicBoolean(false);
     private static Thread voidgloomReminderThread = null;
 
-    private static final Map<ModConfig.ChatRule, Thread>        chatLoopThreads = new ConcurrentHashMap<>();
-    private static final Map<ModConfig.ChatRule, AtomicBoolean> chatLoopFlags   = new ConcurrentHashMap<>();
+    private static final Map<ModConfig.ChatRule, Thread> chatLoopThreads = new ConcurrentHashMap<>();
+    private static final Map<ModConfig.ChatRule, AtomicBoolean> chatLoopFlags = new ConcurrentHashMap<>();
 
     private static final Random RNG = new Random();
 
@@ -108,10 +106,17 @@ public class tse implements ClientModInitializer {
 
         net.tse.ui.MCTheme.applyTheme(config.theme);
 
-        ClientReceiveMessageEvents.CHAT.register(
-                (msg, signed, sender, params, ts) -> handleChatMessage(msg.getString(), false));
-        ClientReceiveMessageEvents.GAME.register(
-                (msg, overlay) -> { if (!overlay) handleChatMessage(msg.getString(), true); });
+        ClientReceiveMessageEvents.CHAT.register((msg, signed, sender, params, ts) -> handleChatMessage(msg.getString(), false));
+        ClientReceiveMessageEvents.GAME.register((msg, overlay) -> {
+            if (!overlay) {
+                String plain = msg.getString().trim();
+                if (!plain.isEmpty()) {
+                    recentMessages.add(0, plain);
+                    if (recentMessages.size() > 20) recentMessages.remove(20);
+                }
+                handleChatMessage(plain, true);
+            }
+        });
         ClientReceiveMessageEvents.ALLOW_GAME.register((msg, overlay) -> {
             String text = msg.getString();
             if (text.contains("Sending to server")) {
@@ -131,7 +136,6 @@ public class tse implements ClientModInitializer {
         });
 
         ClientTickEvents.END_CLIENT_TICK.register(this::onTick);
-
         HudElementRegistry.attachElementAfter(
                 VanillaHudElements.CHAT,
                 Identifier.fromNamespaceAndPath("tse", "tse_hud"),
@@ -208,11 +212,9 @@ public class tse implements ClientModInitializer {
         if (!voidgloomLoopRunning.compareAndSet(false, true)) return;
         voidgloomReminderThread = new Thread(() -> {
             while (voidgloomLoopRunning.get()) {
-
                 String soundFile = config.voidgloom.reminderSound;
                 int    volume    = config.voidgloom.reminderVolume;
                 playSoundBlocking(soundFile, volume);
-
             }
         }, "TSE-Voidgloom-Loop");
         voidgloomReminderThread.setDaemon(true);
@@ -221,7 +223,6 @@ public class tse implements ClientModInitializer {
 
     private static void stopVoidgloomLoop() {
         voidgloomLoopRunning.set(false);
-
         voidgloomReminderThread = null;
     }
 
@@ -253,47 +254,34 @@ public class tse implements ClientModInitializer {
     }
 
     private static void decodeAndPlay(File source, float gain, boolean blocking) {
-        if (source == null || !source.exists()) {
-            System.err.println("[TSE] File not found: " + (source == null ? "null" : source.getAbsolutePath()));
-            return;
-        }
+        if (source == null || !source.exists()) return;
         try {
             AudioInputStream audioIn;
             try {
                 audioIn = AudioSystem.getAudioInputStream(source);
             } catch (Exception e1) {
-                audioIn = AudioSystem.getAudioInputStream(
-                        new BufferedInputStream(new FileInputStream(source), 65536));
+                audioIn = AudioSystem.getAudioInputStream(new BufferedInputStream(new FileInputStream(source), 65536));
             }
             playStream(audioIn, gain);
-        } catch (Exception e) {
-            System.err.println("[TSE] Error playing " + source.getName() + ": " + e);
-            e.printStackTrace();
-        }
+        } catch (Exception e) {}
     }
 
     private static void decodeAndPlayResource(String resourcePath, float gain) {
         InputStream res = EmbeddedSounds.class.getResourceAsStream(resourcePath);
-        if (res == null) { System.err.println("[TSE] Resource not found: " + resourcePath); return; }
+        if (res == null) return;
         try {
-            AudioInputStream audioIn = AudioSystem.getAudioInputStream(
-                    new BufferedInputStream(res, 65536));
+            AudioInputStream audioIn = AudioSystem.getAudioInputStream(new BufferedInputStream(res, 65536));
             playStream(audioIn, gain);
-        } catch (Exception e) {
-            System.err.println("[TSE] Error playing resource " + resourcePath + ": " + e);
-            e.printStackTrace();
-        }
+        } catch (Exception e) {}
     }
 
     private static void playStream(AudioInputStream audioIn, float gain) throws Exception {
         AudioFormat srcFmt = audioIn.getFormat();
         AudioInputStream pcmIn;
 
-        if (srcFmt.getEncoding() == AudioFormat.Encoding.PCM_SIGNED
-                || srcFmt.getEncoding() == AudioFormat.Encoding.PCM_UNSIGNED) {
+        if (srcFmt.getEncoding() == AudioFormat.Encoding.PCM_SIGNED || srcFmt.getEncoding() == AudioFormat.Encoding.PCM_UNSIGNED) {
             pcmIn = audioIn;
         } else {
-
             int ch = srcFmt.getChannels() > 0 ? srcFmt.getChannels() : 2;
             float sr = srcFmt.getSampleRate() > 0 ? srcFmt.getSampleRate() : 44100f;
             AudioFormat pcmFmt = new AudioFormat(
@@ -305,12 +293,10 @@ public class tse implements ClientModInitializer {
         }
 
         AudioFormat decoded = pcmIn.getFormat();
-        int ch  = decoded.getChannels()   > 0 ? decoded.getChannels()   : 2;
+        int ch  = decoded.getChannels() > 0 ? decoded.getChannels() : 2;
         float sr = decoded.getSampleRate() > 0 ? decoded.getSampleRate() : 44100f;
 
-        AudioFormat playFmt = new AudioFormat(
-                AudioFormat.Encoding.PCM_SIGNED,
-                sr, 16, ch, ch * 2, sr, false);
+        AudioFormat playFmt = new AudioFormat(AudioFormat.Encoding.PCM_SIGNED, sr, 16, ch, ch * 2, sr, false);
 
         AudioInputStream playIn = new AudioInputStream(pcmIn, playFmt, pcmIn.getFrameLength());
 
@@ -328,9 +314,7 @@ public class tse implements ClientModInitializer {
     private static void applyGain(SourceDataLine line, float gainFactor) {
         if (line.isControlSupported(FloatControl.Type.MASTER_GAIN)) {
             FloatControl gain = (FloatControl) line.getControl(FloatControl.Type.MASTER_GAIN);
-            float dB = gainFactor > 0
-                    ? (float)(20.0 * Math.log10(gainFactor))
-                    : gain.getMinimum();
+            float dB = gainFactor > 0 ? (float)(20.0 * Math.log10(gainFactor)) : gain.getMinimum();
             gain.setValue(Math.max(gain.getMinimum(), Math.min(gain.getMaximum(), dB)));
         }
     }
@@ -359,7 +343,6 @@ public class tse implements ClientModInitializer {
                 if (!matches) continue;
 
                 if (rule.loopEnabled) {
-
                     if (!chatLoopFlags.containsKey(rule)) {
                         startChatLoop(rule);
                     }
@@ -409,7 +392,6 @@ public class tse implements ClientModInitializer {
             EmbeddedSounds.playSecret();
             return;
         }
-
         java.time.MonthDay _d = java.time.MonthDay.now();
         if (_d.getMonthValue() == 4 && _d.getDayOfMonth() == 1 && EmbeddedSounds.aprilFoolsExists()) {
             EmbeddedSounds.playAprilFools(volume);
@@ -446,18 +428,32 @@ public class tse implements ClientModInitializer {
     public static void refreshAvailableSounds() {
         availableSounds.clear();
         availableSounds.add("Meow");
-
-        for (String name : EmbeddedSounds.SOUNDS.keySet())
+        for (String name : EmbeddedSounds.SOUNDS.keySet()) {
             availableSounds.add(name);
+        }
         if (SOUNDS_DIR.exists()) {
-            File[] files = SOUNDS_DIR.listFiles((d, n) -> {
-                String low = n.toLowerCase();
-                if (low.equals("ngg.ogg")) return false;
-                return low.endsWith(".ogg") || low.endsWith(".wav") || low.endsWith(".mp3");
+            scanDirectory(SOUNDS_DIR, "");
+        }
+    }
+
+    private static void scanDirectory(File dir, String prefix) {
+        File[] files = dir.listFiles();
+        if (files != null) {
+            Arrays.sort(files, (a, b) -> {
+                if (a.isDirectory() && !b.isDirectory()) return -1;
+                if (!a.isDirectory() && b.isDirectory()) return 1;
+                return a.getName().compareToIgnoreCase(b.getName());
             });
-            if (files != null) {
-                Arrays.sort(files);
-                for (File f : files) availableSounds.add(f.getName());
+            for (File f : files) {
+                if (f.isDirectory()) {
+                    scanDirectory(f, prefix + f.getName() + "/");
+                } else {
+                    String low = f.getName().toLowerCase();
+                    if (low.equals("ngg.ogg")) continue;
+                    if (low.endsWith(".ogg") || low.endsWith(".wav") || low.endsWith(".mp3")) {
+                        availableSounds.add(prefix + f.getName());
+                    }
+                }
             }
         }
     }
@@ -470,8 +466,7 @@ public class tse implements ClientModInitializer {
         long now       = System.currentTimeMillis();
         boolean isSneaking = client.player.isShiftKeyDown();
 
-        if (voidgloomSneakActive && config.voidgloom.enabled
-                && config.voidgloom.overlayEnabled && !isSneaking) {
+        if (voidgloomSneakActive && config.voidgloom.enabled && config.voidgloom.overlayEnabled && !isSneaking) {
             boolean show = !config.voidgloom.overlayBlink || (now / 400) % 2 == 0;
             if (show) {
                 int color = config.voidgloom.overlayRainbow
@@ -499,9 +494,7 @@ public class tse implements ClientModInitializer {
                     long elapsed   = (now - rule.timerStartMs) / 1000L;
                     long remaining = Math.max(0, rule.delaySeconds - elapsed);
 
-                    if (rule.closeWarnEnabled
-                            && remaining <= rule.closeWarnSecondsBeforeEnd
-                            && remaining > 0) {
+                    if (rule.closeWarnEnabled && remaining <= rule.closeWarnSecondsBeforeEnd && remaining > 0) {
                         boolean show = !rule.closeWarnBlink || (now / 400) % 2 == 0;
                         if (show) {
                             int color = rule.closeWarnRainbow
@@ -514,32 +507,26 @@ public class tse implements ClientModInitializer {
                     }
 
                     int warnBorder = rule.closeWarnEnabled ? rule.closeWarnSecondsBeforeEnd : 3;
-                    int timerColor = remaining > warnBorder ? 0xFF88FF88
-                            : remaining > 1         ? 0xFFFFDD44 : 0xFFFF4444;
-                    String line = remaining + "s"
-                            + (rule.lastItemName.isEmpty() ? "" : " | " + rule.lastItemName);
+                    int timerColor = remaining > warnBorder ? 0xFF88FF88 : remaining > 1 ? 0xFFFFDD44 : 0xFFFF4444;
+                    String line = remaining + "s" + (rule.lastItemName.isEmpty() ? "" : " | " + rule.lastItemName);
                     context.pose().pushMatrix();
                     context.pose().scale(0.75f, 0.75f);
-                    context.text(client.font, line,
-                            (int)(10 / 0.75f), (int)(20 / 0.75f), timerColor);
+                    context.text(client.font, line, (int)(10 / 0.75f), (int)(20 / 0.75f), timerColor);
                     context.pose().popMatrix();
                 }
             }
         }
     }
 
-    public static void drawHudText(GuiGraphicsExtractor ctx, Minecraft client,
-                                   String rawText, int x, int y, float scale, int color, int screenW) {
+    public static void drawHudText(GuiGraphicsExtractor ctx, Minecraft client, String rawText, int x, int y, float scale, int color, int screenW) {
         String converted = rawText.replace('&', '\u00a7');
         net.minecraft.network.chat.MutableComponent text = net.minecraft.network.chat.Component.literal(converted);
         ctx.pose().pushMatrix();
         ctx.pose().scale(scale, scale);
         if (x < 0)
-            ctx.centeredText(client.font, text,
-                    (int)(screenW / scale / 2), (int)(y / scale), color);
+            ctx.centeredText(client.font, text, (int)(screenW / scale / 2), (int)(y / scale), color);
         else
-            ctx.text(client.font, text,
-                    (int)(x / scale), (int)(y / scale), color);
+            ctx.text(client.font, text, (int)(x / scale), (int)(y / scale), color);
         ctx.pose().popMatrix();
     }
 
@@ -554,20 +541,17 @@ public class tse implements ClientModInitializer {
     public static void runAudioDebug() {
         new Thread(() -> {
             chat("§e[TSE Debug] §fStarting audio diagnostic...");
-
-            chat("§7Java: " + System.getProperty("java.version")
-                    + "  OS: " + System.getProperty("os.name"));
+            chat("§7Java: " + System.getProperty("java.version") + "  OS: " + System.getProperty("os.name"));
 
             Mixer.Info[] mixers = AudioSystem.getMixerInfo();
             chat("§7Mixers found: §f" + mixers.length);
             for (Mixer.Info m : mixers)
-                chat("  §8> §7" + m.getName() + " — " + m.getDescription());
+                chat("  §8> §7" + m.getName() + " - " + m.getDescription());
 
             AudioFormat testFmt = new AudioFormat(44100, 16, 2, true, false);
             DataLine.Info testInfo = new DataLine.Info(SourceDataLine.class, testFmt);
             boolean lineSupported = AudioSystem.isLineSupported(testInfo);
-            chat("§7SourceDataLine (44100/16/stereo) supported: "
-                    + (lineSupported ? "§aYES" : "§cNO — this is why no sound plays"));
+            chat("§7SourceDataLine (44100/16/stereo) supported: " + (lineSupported ? "§aYES" : "§cNO - this is why no sound plays"));
 
             if (lineSupported) {
                 try {
@@ -576,7 +560,7 @@ public class tse implements ClientModInitializer {
                     testLine.close();
                     chat("§7Line open/close test: §aOK");
                 } catch (Exception e) {
-                    chat("§7Line open/close test: §cFAILED — " + e.getMessage());
+                    chat("§7Line open/close test: §cFAILED - " + e.getMessage());
                 }
             }
 
@@ -589,18 +573,15 @@ public class tse implements ClientModInitializer {
                     chat("  §8> §7" + f.getName() + " (" + f.length() + " bytes)");
                     try {
                         AudioInputStream ais = AudioSystem.getAudioInputStream(f);
-                        chat("    §aReadable — format: " + ais.getFormat());
+                        chat("    §aReadable - format: " + ais.getFormat());
                         ais.close();
                     } catch (Exception e) {
-
                         try {
                             AudioInputStream ais2 = AudioSystem.getAudioInputStream(
                                     new BufferedInputStream(new FileInputStream(f), 65536));
-                            chat("    §aReadable via BufferedInputStream — format: " + ais2.getFormat());
+                            chat("    §aReadable via BufferedInputStream - format: " + ais2.getFormat());
                             ais2.close();
-                        } catch (Exception e2) {
-                            chat("    §cNOT readable: " + e.getMessage());
-                        }
+                        } catch (Exception e2) {}
                     }
                 }
             }
@@ -608,8 +589,7 @@ public class tse implements ClientModInitializer {
             chat("§7Embedded sounds: §f" + EmbeddedSounds.SOUNDS.size());
             for (Map.Entry<String, String> e : EmbeddedSounds.SOUNDS.entrySet()) {
                 InputStream s = EmbeddedSounds.class.getResourceAsStream(e.getValue());
-                chat("  §8> §7" + e.getKey() + " → "
-                        + (s != null ? "§afound in jar" : "§cMISSING from jar"));
+                chat("  §8> §7" + e.getKey() + " → " + (s != null ? "§afound in jar" : "§cMISSING from jar"));
                 if (s != null) try { s.close(); } catch (Exception ignored) {}
             }
 
@@ -618,7 +598,6 @@ public class tse implements ClientModInitializer {
 
             chat("§7Running blocking audio test...");
             new Thread(() -> {
-
                 try {
                     InputStream res = EmbeddedSounds.class.getResourceAsStream("/assets/tse/sounds/Anvil.wav");
                     if (res == null) { chat("§cAnvil.wav not in jar"); }
@@ -628,7 +607,7 @@ public class tse implements ClientModInitializer {
                         playStream(ai, 1.0f);
                         chat("§aAnvil.wav played OK");
                     }
-                } catch (Exception e) { chat("§cAnvil.wav FAILED: " + e.getMessage()); }
+                } catch (Exception e) {}
 
                 File[] oggFiles = SOUNDS_DIR.listFiles((d,n) -> n.toLowerCase().endsWith(".ogg"));
                 if (oggFiles != null && oggFiles.length > 0) {
@@ -637,7 +616,7 @@ public class tse implements ClientModInitializer {
                         chat("§7OGG format after getAudioInputStream: §f" + ai.getFormat());
                         playStream(ai, 1.0f);
                         chat("§a" + oggFiles[0].getName() + " played OK");
-                    } catch (Exception e) { chat("§c" + oggFiles[0].getName() + " FAILED: " + e.getMessage()); }
+                    } catch (Exception e) {}
                 }
 
                 File[] mp3Files = SOUNDS_DIR.listFiles((d,n) -> n.toLowerCase().endsWith(".mp3"));
@@ -647,7 +626,7 @@ public class tse implements ClientModInitializer {
                         chat("§7MP3 format after getAudioInputStream: §f" + ai.getFormat());
                         playStream(ai, 1.0f);
                         chat("§a" + mp3Files[0].getName() + " played OK");
-                    } catch (Exception e) { chat("§c" + mp3Files[0].getName() + " FAILED: " + e.getMessage()); }
+                    } catch (Exception e) {}
                 }
 
                 chat("§e[TSE Debug] §fAudio test complete.");
@@ -658,7 +637,7 @@ public class tse implements ClientModInitializer {
     public static void saveConfig() {
         ProfileManager.assignIds(config);
         try (Writer w = new FileWriter(CONFIG_FILE)) { GSON.toJson(config, w); }
-        catch (IOException e) { e.printStackTrace(); }
+        catch (IOException e) {}
     }
 
     private void loadConfig() {
@@ -688,12 +667,11 @@ public class tse implements ClientModInitializer {
                         if (cr.loopEndTrigger == null) cr.loopEndTrigger = "";
                     }
                 }
-
                 config.migrateLegacyChatRules();
                 if (config.categories.isEmpty()) createDefaultCategory();
                 ProfileManager.assignIds(config);
                 ProfileManager.INSTANCE.load();
-            } catch (Exception e) { e.printStackTrace(); }
+            } catch (Exception e) {}
         } else { createDefaultCategory(); saveConfig(); }
     }
 
@@ -705,8 +683,7 @@ public class tse implements ClientModInitializer {
 
     private void registerLogAppender() {
         final LoggerContext ctx = (LoggerContext) LogManager.getContext(false);
-        AbstractAppender appender = new AbstractAppender(
-                "TSE_Scanner", null, null, false, null) {
+        AbstractAppender appender = new AbstractAppender("TSE_Scanner", null, null, false, null) {
             @Override
             public void append(org.apache.logging.log4j.core.LogEvent event) {
                 String msg = event.getMessage().getFormattedMessage();
