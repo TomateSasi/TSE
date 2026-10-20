@@ -11,11 +11,31 @@ public class FlatButton extends AbstractWidget {
 
     public interface PressAction { void onPress(FlatButton button); }
 
-    private final PressAction onPress;
+    public enum Style {
+        DEFAULT,
+        ACCENT,
+        DANGER,
+        GHOST,
+        TAB
+    }
 
-    private FlatButton(int x, int y, int w, int h, Component text, PressAction onPress) {
+    private final PressAction onPress;
+    private final Style style;
+    private boolean selected;
+
+    private FlatButton(int x, int y, int w, int h, Component text, PressAction onPress, Style style, boolean selected) {
         super(x, y, w, h, text);
         this.onPress = onPress;
+        this.style = style;
+        this.selected = selected;
+    }
+
+    public void setSelected(boolean selected) {
+        this.selected = selected;
+    }
+
+    public boolean isSelected() {
+        return selected;
     }
 
     public static Builder builder(Component text, PressAction onPress) {
@@ -26,6 +46,8 @@ public class FlatButton extends AbstractWidget {
         private final Component text;
         private final PressAction onPress;
         private int x, y, w, h;
+        private Style style = Style.DEFAULT;
+        private boolean selected = false;
 
         Builder(Component text, PressAction onPress) { this.text = text; this.onPress = onPress; }
 
@@ -34,8 +56,18 @@ public class FlatButton extends AbstractWidget {
             return this;
         }
 
+        public Builder style(Style style) {
+            this.style = style;
+            return this;
+        }
+
+        public Builder selected(boolean selected) {
+            this.selected = selected;
+            return this;
+        }
+
         public FlatButton build() {
-            return new FlatButton(x, y, w, h, text, onPress);
+            return new FlatButton(x, y, w, h, text, onPress, style, selected);
         }
     }
 
@@ -49,9 +81,53 @@ public class FlatButton extends AbstractWidget {
         var mc = Minecraft.getInstance();
         int x = getX(), y = getY(), w = getWidth(), h = getHeight();
         boolean hovered = isHovered();
-        int color = !active ? MCTheme.TEXT_DIM : (hovered ? MCTheme.accent(255) : MCTheme.TEXT);
+
+        switch (style) {
+            case TAB -> {
+                if (selected) {
+                    MCTheme.fillRounded(context, x, y, w, h, 4, MCTheme.accent(36));
+                    MCTheme.drawRoundedOutline(context, x, y, w, h, 4, MCTheme.accent(90));
+                    MCTheme.fillRounded(context, x, y + 3, 2, h - 6, 1, MCTheme.accent(255));
+                } else if (hovered) {
+                    MCTheme.fillRounded(context, x, y, w, h, 4, MCTheme.BUTTON_BG_HOVER);
+                }
+                int textColor = selected ? MCTheme.TEXT : (hovered ? MCTheme.TEXT : MCTheme.TEXT_DIM);
+                String s = getMessage().getString();
+                String trimmed = mc.font.plainSubstrByWidth(s, w - 12);
+                MCTheme.drawTextHD(context, mc.font, trimmed, x + 8, y + (h - 8) / 2, textColor, false);
+            }
+            case DANGER -> {
+                int bg = hovered ? MCTheme.DELETE_BG_HOVER : MCTheme.DELETE_BG;
+                int border = hovered ? 0x88FF6666 : 0x44FF5555;
+                MCTheme.fillRoundedCard(context, x, y, w, h, 4, bg, border);
+                drawCenteredLabel(context, mc, x, y, w, h, 0xFFFFE5E5);
+            }
+            case ACCENT -> {
+                int bg = hovered ? MCTheme.accent(65) : MCTheme.accent(38);
+                int border = hovered ? MCTheme.accent(180) : MCTheme.accent(110);
+                MCTheme.fillRoundedCard(context, x, y, w, h, 4, bg, border);
+                drawCenteredLabel(context, mc, x, y, w, h, MCTheme.TEXT);
+            }
+            case GHOST -> {
+                if (hovered) {
+                    MCTheme.fillRounded(context, x, y, w, h, 4, MCTheme.BUTTON_BG_HOVER);
+                }
+                int color = !active ? MCTheme.TEXT_DIM : (hovered ? MCTheme.accent(255) : MCTheme.TEXT_DIM);
+                drawCenteredLabel(context, mc, x, y, w, h, color);
+            }
+            default -> {
+                int bg = hovered ? MCTheme.BUTTON_BG_HOVER : MCTheme.BUTTON_BG;
+                int border = hovered ? MCTheme.accent(120) : MCTheme.CARD_BORDER;
+                MCTheme.fillRoundedCard(context, x, y, w, h, 4, bg, border);
+                int color = !active ? MCTheme.TEXT_DIM : (hovered ? MCTheme.TEXT : 0xFFE0E0E6);
+                drawCenteredLabel(context, mc, x, y, w, h, color);
+            }
+        }
+    }
+
+    private void drawCenteredLabel(GuiGraphicsExtractor context, Minecraft mc, int x, int y, int w, int h, int color) {
         String s = getMessage().getString();
-        String trimmed = mc.font.plainSubstrByWidth(s, w);
+        String trimmed = mc.font.plainSubstrByWidth(s, Math.max(4, w - 6));
         int textW = mc.font.width(trimmed);
         int tx = x + Math.max(0, (w - textW) / 2);
         int ty = y + (h - 8) / 2;

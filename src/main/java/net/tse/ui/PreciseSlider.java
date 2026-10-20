@@ -40,7 +40,7 @@ public class PreciseSlider extends AbstractWidget {
         this.label = label;
     }
 
-    public static final int LABEL_HEIGHT = 9;
+    public static final int LABEL_HEIGHT = 10;
 
     public double get() { return value; }
 
@@ -50,17 +50,17 @@ public class PreciseSlider extends AbstractWidget {
         return c;
     }
 
-    private static final int VALUE_ZONE_W = 56;
+    private static final int VALUE_ZONE_W = 48;
 
     @Override
     public void onClick(MouseButtonEvent click, boolean doubleClick) {
-
         double mouseX = click.x();
         int x = getX(), w = getWidth();
         if (mouseX >= x + w - VALUE_ZONE_W) {
             beginEdit();
             return;
         }
+        editing = false;
         dragTo(mouseX);
     }
 
@@ -70,7 +70,7 @@ public class PreciseSlider extends AbstractWidget {
     }
 
     private void dragTo(double mouseX) {
-        int x = getX(), w = getWidth() - VALUE_ZONE_W;
+        int x = getX(), w = getWidth() - VALUE_ZONE_W - 6;
         double t = (mouseX - x) / (double) Math.max(1, w);
         t = Math.max(0, Math.min(1, t));
         double newVal = clamp(min + t * (max - min));
@@ -116,7 +116,6 @@ public class PreciseSlider extends AbstractWidget {
     @Override
     public boolean charTyped(CharacterEvent input) {
         if (!editing) return false;
-
         char chr = (char) input.codepoint();
         if (Character.isDigit(chr) || chr == '.' || chr == '-') {
             editBuffer.append(chr);
@@ -135,17 +134,26 @@ public class PreciseSlider extends AbstractWidget {
         }
 
         int trackY = y + h / 2 - 2;
-        MCTheme.fillRounded(context, x, trackY, trackW, 4, 2, MCTheme.FIELD_BG);
+        MCTheme.fillRoundedCard(context, x, trackY, trackW, 5, 2, MCTheme.FIELD_BG, MCTheme.BORDER);
         double t = max > min ? (value - min) / (max - min) : 0;
-        int fillX = x + (int) (trackW * t);
-        if (fillX > x) MCTheme.fillRounded(context, x, trackY, fillX - x, 4, 2, MCTheme.accent());
+        int fillW = (int) Math.round(trackW * t);
+        if (fillW > 0) {
+            MCTheme.fillRounded(context, x, trackY, Math.max(4, fillW), 5, 2, MCTheme.accent(230));
+        }
 
-        int knobR = 5;
-        MCTheme.fillRounded(context, fillX - knobR, y + h / 2 - knobR, knobR * 2, knobR * 2, knobR, 0xFFFFFFFF);
+        int knobX = x + fillW;
+        int knobR = isHovered() ? 5 : 4;
+        MCTheme.fillRounded(context, knobX - knobR, y + h / 2 - knobR, knobR * 2 + 1, knobR * 2 + 1, knobR, 0xFFFFFFFF);
+
+        int badgeX = x + trackW + 6;
+        int badgeW = VALUE_ZONE_W;
+        int badgeBorder = editing ? MCTheme.accent(200) : MCTheme.BORDER;
+        MCTheme.fillRoundedCard(context, badgeX, y + 1, badgeW, h - 2, 3, MCTheme.FIELD_BG, badgeBorder);
 
         String text = editing ? (editBuffer + "_") : formatter.format(value);
         int textColor = editing ? MCTheme.accent(255) : MCTheme.TEXT;
-        MCTheme.drawTextHD(context, mc.font, text, x + trackW + 8, y + (h - 8) / 2, textColor, true);
+        int textW = mc.font.width(text);
+        MCTheme.drawTextHD(context, mc.font, text, badgeX + (badgeW - textW) / 2, y + (h - 8) / 2, textColor, false);
     }
 
     @Override

@@ -9,7 +9,7 @@ import net.minecraft.network.chat.Component;
 
 public class ToggleWidget extends AbstractWidget {
 
-    public static final int W = 22, H = 12;
+    public static final int W = 24, H = 12;
 
     private boolean value;
     private final Consumer<Boolean> onChange;
@@ -32,14 +32,14 @@ public class ToggleWidget extends AbstractWidget {
     @Override
     protected void extractWidgetRenderState(GuiGraphicsExtractor context, int mouseX, int mouseY, float delta) {
         int x = getX(), y = getY(), w = getWidth(), h = getHeight();
-        int track = value ? MCTheme.accent() : MCTheme.FIELD_BG;
-        if (isHovered()) track = MCTheme.withAlpha(track, 255);
-        MCTheme.fillRounded(context, x, y, w, h, 6, track);
+        int track = value ? MCTheme.accent(isHovered() ? 245 : 210) : (isHovered() ? MCTheme.BUTTON_BG_HOVER : MCTheme.FIELD_BG);
+        int border = value ? MCTheme.accent(255) : (isHovered() ? MCTheme.CARD_BORDER : MCTheme.BORDER);
+        MCTheme.fillRoundedCard(context, x, y, w, h, h / 2, track, border);
 
-        int knobR = h / 2 - 2;
-        int knobCx = value ? (x + w - h / 2) : (x + h / 2);
-        int knobCy = y + h / 2;
-        MCTheme.fillRounded(context, knobCx - knobR, knobCy - knobR, knobR * 2, knobR * 2, knobR, 0xFFFFFFFF);
+        int knobSize = h - 4;
+        int knobX = value ? (x + w - knobSize - 2) : (x + 2);
+        int knobY = y + 2;
+        MCTheme.fillRounded(context, knobX, knobY, knobSize, knobSize, knobSize / 2, value ? 0xFFFFFFFF : 0xFFCCCCD4);
     }
 
     @Override

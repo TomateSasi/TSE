@@ -78,7 +78,6 @@ public final class MCTheme {
         final int SUB = 4;
 
         for (int i = 0; i < r; i++) {
-
             double minReach = Double.MAX_VALUE, maxReach = -Double.MAX_VALUE;
             for (int s = 0; s < SUB; s++) {
                 double subY = i + (s + 0.5) / SUB;
@@ -115,18 +114,51 @@ public final class MCTheme {
         }
     }
 
-    public static final int WINDOW_BG   = argb(235, 16, 16, 16);
-    public static final int PANEL_BG    = argb(255, 20, 20, 20);
-    public static final int CARD_FILL   = argb(255, 32, 32, 32);
-    public static final int CARD_BORDER = argb(24, 255, 255, 255);
-    public static final int BORDER      = argb(15, 255, 255, 255);
-    public static final int TEXT        = 0xFFFFFFFF;
-    public static final int TEXT_DIM    = 0xFF8B8B8B;
-    public static final int FIELD_BG    = argb(255, 16, 16, 16);
-    public static final int FIELD_BG_HOVER = argb(255, 26, 26, 26);
-    public static final int BUTTON_BG        = argb(255, 26, 26, 26);
-    public static final int BUTTON_BG_HOVER  = argb(255, 33, 33, 33);
-    public static final int DELETE_BG        = argb(255, 122, 20, 20);
-    public static final int DELETE_BG_HOVER  = argb(255, 178, 36, 36);
-    public static final int SIDEBAR_BG       = argb(255, 12, 12, 12);
+    public static void drawRoundedOutline(GuiGraphicsExtractor context, int x, int y, int w, int h, int radius, int color) {
+        int r = Math.max(0, Math.min(radius, Math.min(w, h) / 2));
+        if (r <= 1) {
+            context.outline(x, y, w, h, color);
+            return;
+        }
+        context.fill(x + r, y, x + w - r, y + 1, color);
+        context.fill(x + r, y + h - 1, x + w - r, y + h, color);
+        context.fill(x, y + r, x + 1, y + h - r, color);
+        context.fill(x + w - 1, y + r, x + w, y + h - r, color);
+
+        int prevReach = 0;
+        for (int i = 0; i < r; i++) {
+            double dist = r - (i + 0.5);
+            int reach = (int) Math.round(Math.sqrt(Math.max(0.0, (double) r * r - dist * dist)));
+            int span = Math.max(1, prevReach > 0 ? Math.abs(reach - prevReach) : 1);
+            int start = Math.max(0, reach - span);
+
+            context.fill(x + r - reach, y + i, x + r - start, y + i + 1, color);
+            context.fill(x + w - r + start, y + i, x + w - r + reach, y + i + 1, color);
+            context.fill(x + r - reach, y + h - 1 - i, x + r - start, y + h - i, color);
+            context.fill(x + w - r + start, y + h - 1 - i, x + w - r + reach, y + h - i, color);
+            prevReach = reach;
+        }
+    }
+
+    public static void fillRoundedCard(GuiGraphicsExtractor context, int x, int y, int w, int h, int radius, int fillColor, int borderColor) {
+        fillRounded(context, x, y, w, h, radius, fillColor);
+        drawRoundedOutline(context, x, y, w, h, radius, borderColor);
+    }
+
+    public static final int WINDOW_BG        = argb(232, 16, 16, 18);
+    public static final int SIDEBAR_BG       = argb(210, 12, 12, 14);
+    public static final int HEADER_BG        = argb(210, 14, 14, 16);
+    public static final int PANEL_BG         = argb(242, 20, 20, 23);
+    public static final int CARD_FILL        = argb(195, 28, 28, 32);
+    public static final int CARD_HEADER_FILL = argb(215, 34, 34, 39);
+    public static final int CARD_BORDER      = argb(28, 255, 255, 255);
+    public static final int BORDER           = argb(20, 255, 255, 255);
+    public static final int TEXT             = 0xFFF2F2F4;
+    public static final int TEXT_DIM         = 0xFF94949E;
+    public static final int FIELD_BG         = argb(220, 14, 14, 16);
+    public static final int FIELD_BG_HOVER   = argb(235, 22, 22, 26);
+    public static final int BUTTON_BG        = argb(215, 26, 26, 30);
+    public static final int BUTTON_BG_HOVER  = argb(235, 36, 36, 42);
+    public static final int DELETE_BG        = argb(200, 110, 24, 24);
+    public static final int DELETE_BG_HOVER  = argb(235, 165, 36, 36);
 }

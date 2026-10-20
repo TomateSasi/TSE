@@ -77,6 +77,17 @@ public class tse implements ClientModInitializer {
     }
     public static boolean canUndo() { return !undoStack.isEmpty(); }
 
+    private static final Set<SourceDataLine> activeAudioLines = ConcurrentHashMap.newKeySet();
+    public static void stopAllSounds() {
+        for (SourceDataLine line : activeAudioLines) {
+            if (line != null && line.isOpen()) {
+                line.flush();
+                line.close();
+            }
+        }
+        activeAudioLines.clear();
+    }
+
     @Override
     public void onInitializeClient() {
         if (!SOUNDS_DIR.exists()) SOUNDS_DIR.mkdirs();
@@ -279,7 +290,8 @@ public class tse implements ClientModInitializer {
         AudioFormat srcFmt = audioIn.getFormat();
         AudioInputStream pcmIn;
 
-        if (srcFmt.getEncoding() == AudioFormat.Encoding.PCM_SIGNED || srcFmt.getEncoding() == AudioFormat.Encoding.PCM_UNSIGNED) {
+        if (srcFmt.getEncoding() == AudioFormat.Encoding.PCM_SIGNED
+                || srcFmt.getEncoding() == AudioFormat.Encoding.PCM_UNSIGNED) {
             pcmIn = audioIn;
         } else {
             int ch = srcFmt.getChannels() > 0 ? srcFmt.getChannels() : 2;
@@ -293,22 +305,46 @@ public class tse implements ClientModInitializer {
         }
 
         AudioFormat decoded = pcmIn.getFormat();
-        int ch  = decoded.getChannels() > 0 ? decoded.getChannels() : 2;
+        int ch  = decoded.getChannels()   > 0 ? decoded.getChannels()   : 2;
         float sr = decoded.getSampleRate() > 0 ? decoded.getSampleRate() : 44100f;
 
-        AudioFormat playFmt = new AudioFormat(AudioFormat.Encoding.PCM_SIGNED, sr, 16, ch, ch * 2, sr, false);
+        AudioFormat playFmt = new AudioFormat(
+                AudioFormat.Encoding.PCM_SIGNED,
+                sr, 16, ch, ch * 2, sr, false);
 
         AudioInputStream playIn = new AudioInputStream(pcmIn, playFmt, pcmIn.getFrameLength());
 
         DataLine.Info info = new DataLine.Info(SourceDataLine.class, playFmt);
         SourceDataLine line = (SourceDataLine) AudioSystem.getLine(info);
+
         line.open(playFmt);
+        activeAudioLines.add(line);
         applyGain(line, gain);
         line.start();
-        byte[] buf = new byte[4096]; int read;
-        while ((read = playIn.read(buf)) != -1) line.write(buf, 0, read);
-        line.drain(); line.close();
-        playIn.close();
+
+        byte[] buf = new byte[4096];
+        int read;
+
+        try {
+            while ((read = playIn.read(buf)) != -1) {
+                if (Thread.currentThread().isInterrupted()) {
+                    break;
+                }
+                line.write(buf, 0, read);
+            }
+        } catch (Exception ignored) {
+        } finally {
+            activeAudioLines.remove(line);
+            if (line.isOpen()) {
+                if (Thread.currentThread().isInterrupted()) {
+                    line.flush();
+                } else {
+                    line.drain();
+                }
+                line.close();
+            }
+            playIn.close();
+        }
     }
 
     private static void applyGain(SourceDataLine line, float gainFactor) {
@@ -371,6 +407,7 @@ public class tse implements ClientModInitializer {
         if (flag != null) flag.set(false);
         Thread t = chatLoopThreads.remove(rule);
         if (t != null) t.interrupt();
+        stopAllSounds();
     }
 
     private void triggerRule(ModConfig.SoundRule rule) {
