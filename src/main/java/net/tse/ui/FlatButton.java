@@ -22,6 +22,7 @@ public class FlatButton extends AbstractWidget {
     private final PressAction onPress;
     private final Style style;
     private boolean selected;
+    private float hoverAnim = 0f;
 
     private FlatButton(int x, int y, int w, int h, Component text, PressAction onPress, Style style, boolean selected) {
         super(x, y, w, h, text);
@@ -80,46 +81,47 @@ public class FlatButton extends AbstractWidget {
     protected void extractWidgetRenderState(GuiGraphicsExtractor context, int mouseX, int mouseY, float delta) {
         var mc = Minecraft.getInstance();
         int x = getX(), y = getY(), w = getWidth(), h = getHeight();
-        boolean hovered = isHovered();
+        boolean hovered = isHovered() && active;
+        hoverAnim += ((hovered ? 1f : 0f) - hoverAnim) * 0.28f;
 
         switch (style) {
             case TAB -> {
                 if (selected) {
-                    MCTheme.fillRounded(context, x, y, w, h, 4, MCTheme.accent(36));
-                    MCTheme.drawRoundedOutline(context, x, y, w, h, 4, MCTheme.accent(90));
+                    MCTheme.fillRounded(context, x, y, w, h, 4, MCTheme.accent(40));
+                    MCTheme.drawRoundedOutline(context, x, y, w, h, 4, MCTheme.accent(100));
                     MCTheme.fillRounded(context, x, y + 3, 2, h - 6, 1, MCTheme.accent(255));
-                } else if (hovered) {
-                    MCTheme.fillRounded(context, x, y, w, h, 4, MCTheme.BUTTON_BG_HOVER);
+                } else if (hoverAnim > 0.02f) {
+                    MCTheme.fillRounded(context, x, y, w, h, 4, MCTheme.withAlpha(MCTheme.BUTTON_BG_HOVER, (int) (220 * hoverAnim)));
                 }
-                int textColor = selected ? MCTheme.TEXT : (hovered ? MCTheme.TEXT : MCTheme.TEXT_DIM);
+                int textColor = selected ? MCTheme.TEXT : MCTheme.lerpColor(MCTheme.TEXT_DIM, MCTheme.TEXT, hoverAnim);
                 String s = getMessage().getString();
                 String trimmed = mc.font.plainSubstrByWidth(s, w - 12);
                 MCTheme.drawTextHD(context, mc.font, trimmed, x + 8, y + (h - 8) / 2, textColor, false);
             }
             case DANGER -> {
-                int bg = hovered ? MCTheme.DELETE_BG_HOVER : MCTheme.DELETE_BG;
-                int border = hovered ? 0x88FF6666 : 0x44FF5555;
+                int bg = MCTheme.lerpColor(MCTheme.DELETE_BG, MCTheme.DELETE_BG_HOVER, hoverAnim);
+                int border = MCTheme.lerpColor(0x44FF5555, 0x99FF6666, hoverAnim);
                 MCTheme.fillRoundedCard(context, x, y, w, h, 4, bg, border);
                 drawCenteredLabel(context, mc, x, y, w, h, 0xFFFFE5E5);
             }
             case ACCENT -> {
-                int bg = hovered ? MCTheme.accent(65) : MCTheme.accent(38);
-                int border = hovered ? MCTheme.accent(180) : MCTheme.accent(110);
+                int bg = MCTheme.lerpColor(MCTheme.accent(38), MCTheme.accent(72), hoverAnim);
+                int border = MCTheme.lerpColor(MCTheme.accent(110), MCTheme.accent(195), hoverAnim);
                 MCTheme.fillRoundedCard(context, x, y, w, h, 4, bg, border);
                 drawCenteredLabel(context, mc, x, y, w, h, MCTheme.TEXT);
             }
             case GHOST -> {
-                if (hovered) {
-                    MCTheme.fillRounded(context, x, y, w, h, 4, MCTheme.BUTTON_BG_HOVER);
+                if (hoverAnim > 0.02f) {
+                    MCTheme.fillRounded(context, x, y, w, h, 4, MCTheme.withAlpha(MCTheme.BUTTON_BG_HOVER, (int) (220 * hoverAnim)));
                 }
-                int color = !active ? MCTheme.TEXT_DIM : (hovered ? MCTheme.accent(255) : MCTheme.TEXT_DIM);
+                int color = !active ? MCTheme.TEXT_DIM : MCTheme.lerpColor(MCTheme.TEXT_DIM, MCTheme.accent(255), hoverAnim);
                 drawCenteredLabel(context, mc, x, y, w, h, color);
             }
             default -> {
-                int bg = hovered ? MCTheme.BUTTON_BG_HOVER : MCTheme.BUTTON_BG;
-                int border = hovered ? MCTheme.accent(120) : MCTheme.CARD_BORDER;
+                int bg = MCTheme.lerpColor(MCTheme.BUTTON_BG, MCTheme.BUTTON_BG_HOVER, hoverAnim);
+                int border = MCTheme.lerpColor(MCTheme.CARD_BORDER, MCTheme.accent(130), hoverAnim);
                 MCTheme.fillRoundedCard(context, x, y, w, h, 4, bg, border);
-                int color = !active ? MCTheme.TEXT_DIM : (hovered ? MCTheme.TEXT : 0xFFE0E0E6);
+                int color = !active ? MCTheme.TEXT_DIM : MCTheme.lerpColor(0xFFE0E0E6, MCTheme.TEXT, hoverAnim);
                 drawCenteredLabel(context, mc, x, y, w, h, color);
             }
         }

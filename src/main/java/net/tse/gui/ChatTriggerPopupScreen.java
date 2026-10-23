@@ -5,6 +5,7 @@ import com.example.tse;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.input.CharacterEvent;
 import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
@@ -83,6 +84,7 @@ public class ChatTriggerPopupScreen extends Screen {
             cat.rules.add(0, newRule);
             cat.collapsed = false;
             tse.saveConfig();
+            MCTheme.showToast("Added trigger to '" + cat.name + "'");
         }
         onClose();
     }
@@ -105,6 +107,8 @@ public class ChatTriggerPopupScreen extends Screen {
             categoryDropdown.updateHover(mouseX, mouseY);
             categoryDropdown.renderDropdown(context);
         }
+
+        MCTheme.renderToasts(context, font, width, height);
     }
 
     @Override
@@ -143,6 +147,9 @@ public class ChatTriggerPopupScreen extends Screen {
 
     @Override
     public boolean keyPressed(KeyEvent input) {
+        if (categoryDropdown != null && categoryDropdown.isOpen()) {
+            return categoryDropdown.keyPressed(input);
+        }
         int key = input.key();
         if (key == GLFW.GLFW_KEY_ENTER || key == GLFW.GLFW_KEY_KP_ENTER) {
             submitTrigger();
@@ -153,6 +160,14 @@ public class ChatTriggerPopupScreen extends Screen {
             return true;
         }
         return super.keyPressed(input);
+    }
+
+    @Override
+    public boolean charTyped(CharacterEvent input) {
+        if (categoryDropdown != null && categoryDropdown.isOpen()) {
+            return categoryDropdown.charTyped(input);
+        }
+        return super.charTyped(input);
     }
 
     @Override

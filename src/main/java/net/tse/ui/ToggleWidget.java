@@ -12,11 +12,14 @@ public class ToggleWidget extends AbstractWidget {
     public static final int W = 24, H = 12;
 
     private boolean value;
+    private float animProgress;
+    private float hoverProgress;
     private final Consumer<Boolean> onChange;
 
     public ToggleWidget(int x, int y, boolean initial, Consumer<Boolean> onChange) {
         super(x, y, W, H, Component.empty());
         this.value = initial;
+        this.animProgress = initial ? 1f : 0f;
         this.onChange = onChange;
     }
 
@@ -32,14 +35,26 @@ public class ToggleWidget extends AbstractWidget {
     @Override
     protected void extractWidgetRenderState(GuiGraphicsExtractor context, int mouseX, int mouseY, float delta) {
         int x = getX(), y = getY(), w = getWidth(), h = getHeight();
-        int track = value ? MCTheme.accent(isHovered() ? 245 : 210) : (isHovered() ? MCTheme.BUTTON_BG_HOVER : MCTheme.FIELD_BG);
-        int border = value ? MCTheme.accent(255) : (isHovered() ? MCTheme.CARD_BORDER : MCTheme.BORDER);
+
+        animProgress += ((value ? 1f : 0f) - animProgress) * 0.28f;
+        hoverProgress += ((isHovered() ? 1f : 0f) - hoverProgress) * 0.28f;
+
+        int offTrack = MCTheme.lerpColor(MCTheme.FIELD_BG, MCTheme.BUTTON_BG_HOVER, hoverProgress);
+        int onTrack = MCTheme.accent(Math.round(205 + 40 * hoverProgress));
+        int track = MCTheme.lerpColor(offTrack, onTrack, animProgress);
+
+        int offBorder = MCTheme.lerpColor(MCTheme.BORDER, MCTheme.CARD_BORDER, hoverProgress);
+        int border = MCTheme.lerpColor(offBorder, MCTheme.accent(255), animProgress);
+
         MCTheme.fillRoundedCard(context, x, y, w, h, h / 2, track, border);
 
         int knobSize = h - 4;
-        int knobX = value ? (x + w - knobSize - 2) : (x + 2);
+        int minX = x + 2;
+        int maxX = x + w - knobSize - 2;
+        int knobX = Math.round(minX + (maxX - minX) * animProgress);
         int knobY = y + 2;
-        MCTheme.fillRounded(context, knobX, knobY, knobSize, knobSize, knobSize / 2, value ? 0xFFFFFFFF : 0xFFCCCCD4);
+        int knobColor = MCTheme.lerpColor(0xFFCCCCD4, 0xFFFFFFFF, animProgress);
+        MCTheme.fillRounded(context, knobX, knobY, knobSize, knobSize, knobSize / 2, knobColor);
     }
 
     @Override

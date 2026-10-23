@@ -9,9 +9,14 @@ public class ModConfig {
 
     public List<ChatRule> chatRules = new ArrayList<>();
 
-    public VoidgloomSettings  voidgloom     = new VoidgloomSettings();
-    public boolean            masterEnabled = true;
-    public String             theme         = "Default";
+    public VoidgloomSettings  voidgloom        = new VoidgloomSettings();
+    public boolean            masterEnabled    = true;
+    public String             theme            = "Default";
+    public int                customThemeColor = 0xFFDC2828;
+
+    public int   timerHudX     = 10;
+    public int   timerHudY     = 20;
+    public float timerHudScale = 1.0f;
 
     public void migrateLegacyChatRules() {
         if (!chatRules.isEmpty()) {
@@ -174,6 +179,12 @@ public class ModConfig {
         v.overlayY = this.voidgloom.overlayY; v.overlayRainbow = this.voidgloom.overlayRainbow;
         v.overlayBlink = this.voidgloom.overlayBlink;
         c.voidgloom = v;
+        c.masterEnabled = this.masterEnabled;
+        c.theme = this.theme;
+        c.customThemeColor = this.customThemeColor;
+        c.timerHudX = this.timerHudX;
+        c.timerHudY = this.timerHudY;
+        c.timerHudScale = this.timerHudScale;
         return c;
     }
 }

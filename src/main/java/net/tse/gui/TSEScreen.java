@@ -68,12 +68,19 @@ public class TSEScreen extends Screen {
     private final List<FlatButton> navButtons = new ArrayList<>();
     private AbstractWidget focusedContent = null;
 
-    private record CardRect(int x, int y, int w, int h, int fill, int border, boolean accentLeft) {}
+    private static class CardRect {
+        int x, y, w, h, fill, border;
+        boolean accentLeft;
+        CardRect(int x, int y, int w, int h, int fill, int border, boolean accentLeft) {
+            this.x = x; this.y = y; this.w = w; this.h = h;
+            this.fill = fill; this.border = border; this.accentLeft = accentLeft;
+        }
+    }
     private final List<CardRect> cardRects = new ArrayList<>();
 
-    private final EditBox ruleSearch;
-    private final EditBox chatSearch;
-    private final EditBox newProfileName;
+    private final FlatTextField ruleSearch;
+    private final FlatTextField chatSearch;
+    private final FlatTextField newProfileName;
 
     private ModConfig.SoundRule capturingRule = null;
 
@@ -149,6 +156,21 @@ public class TSEScreen extends Screen {
         }
     }
 
+    private void shiftScrollElements(int dy) {
+        if (dy == 0) return;
+        for (AbstractWidget w : contentWidgets) {
+            if (w instanceof FlatTextField ftf) {
+                ftf.offsetY(dy);
+            } else {
+                w.setY(w.getY() + dy);
+            }
+        }
+        for (CardRect c : cardRects) c.y += dy;
+        for (Object[] s : sectionLabels) s[1] = (int) s[1] + dy;
+        for (Object[] l : inlineLabels) l[2] = (int) l[2] + dy;
+        for (int[] p : profileLabelPositions) p[0] += dy;
+    }
+
     private void buildPageOnce() {
         contentWidgets.clear();
         cardRects.clear();
@@ -156,6 +178,7 @@ public class TSEScreen extends Screen {
         sectionLabels.clear();
         inlineLabels.clear();
         profileLabels.clear();
+        profileLabelPositions.clear();
         cursorY = contentY - scrollOffset;
 
         switch (PAGES[activePage]) {
@@ -190,14 +213,27 @@ public class TSEScreen extends Screen {
         add(ruleSearch);
 
         int btnRight = left + contentW;
-        add(FlatButton.builder(Component.literal("Undo"), b -> { tse.undo(); rebuildContent(); })
+        add(FlatButton.builder(Component.literal("Undo"), b -> {
+                    if (tse.undo()) {
+                        tse.saveConfig();
+                        MCTheme.showToast("Undo applied");
+                    } else {
+                        MCTheme.showToast("Nothing to undo");
+                    }
+                    rebuildContent();
+                })
                 .dimensions(btnRight - 44, cursorY, 44, 18).build());
-        add(FlatButton.builder(Component.literal("Refresh"), b -> { tse.refreshAvailableSounds(); rebuildContent(); })
+        add(FlatButton.builder(Component.literal("Refresh"), b -> {
+                    tse.refreshAvailableSounds();
+                    MCTheme.showToast("Refreshed " + tse.availableSounds.size() + " sounds");
+                    rebuildContent();
+                })
                 .dimensions(btnRight - 102, cursorY, 54, 18).build());
         add(FlatButton.builder(Component.literal("+ Category"), b -> {
                     tse.pushUndo();
                     tse.config.categories.add(new ModConfig.Category("New Category"));
                     tse.saveConfig();
+                    MCTheme.showToast("Category created");
                     rebuildContent();
                 })
                 .dimensions(btnRight - 178, cursorY, 72, 18)
@@ -263,6 +299,7 @@ public class TSEScreen extends Screen {
                     cat.rules.add(new ModConfig.SoundRule("item", "", 0, true));
                     cat.collapsed = false;
                     tse.saveConfig();
+                    MCTheme.showToast("Added new sound rule");
                     rebuildContent();
                 })
                 .dimensions(left + w - 122, cursorY + 4, 56, 18)
@@ -270,7 +307,11 @@ public class TSEScreen extends Screen {
                 .build());
 
         add(deleteButton(left + w - 62, cursorY + 4, 56, 18, () -> {
-            tse.pushUndo(); tse.config.categories.remove(cat); tse.saveConfig(); rebuildContent();
+            tse.pushUndo();
+            tse.config.categories.remove(cat);
+            tse.saveConfig();
+            MCTheme.showToast("Category deleted");
+            rebuildContent();
         }));
 
         cursorY += h + 4;
@@ -294,7 +335,7 @@ public class TSEScreen extends Screen {
                 .style(FlatButton.Style.GHOST)
                 .build());
 
-        add(new ToggleWidget(left + 20, rowY + 3, rule.enabled, v -> { rule.enabled = v; tse.saveConfig(); }));
+        add(new ToggleWidget(left + 20, rowY + 3, rule.enabled, v -> { rule.enabled = v; tse.saveConfig(); rebuildContent(); }));
 
         int x = left + 20 + ToggleWidget.W + 6;
         EditBox item = new FlatTextField(font, x, rowY, 110, 18, Component.literal("Item"));
@@ -312,7 +353,11 @@ public class TSEScreen extends Screen {
         }));
 
         add(deleteButton(left + innerW - 50, rowY, 50, 18, () -> {
-            tse.pushUndo(); cat.rules.remove(rule); tse.saveConfig(); rebuildContent();
+            tse.pushUndo();
+            cat.rules.remove(rule);
+            tse.saveConfig();
+            MCTheme.showToast("Rule deleted");
+            rebuildContent();
         }));
 
         if (rule.collapsed) {
@@ -374,14 +419,27 @@ public class TSEScreen extends Screen {
         add(chatSearch);
 
         int btnRight = left + contentW;
-        add(FlatButton.builder(Component.literal("Undo"), b -> { tse.undo(); rebuildContent(); })
+        add(FlatButton.builder(Component.literal("Undo"), b -> {
+                    if (tse.undo()) {
+                        tse.saveConfig();
+                        MCTheme.showToast("Undo applied");
+                    } else {
+                        MCTheme.showToast("Nothing to undo");
+                    }
+                    rebuildContent();
+                })
                 .dimensions(btnRight - 44, cursorY, 44, 18).build());
-        add(FlatButton.builder(Component.literal("Refresh"), b -> { tse.refreshAvailableSounds(); rebuildContent(); })
+        add(FlatButton.builder(Component.literal("Refresh"), b -> {
+                    tse.refreshAvailableSounds();
+                    MCTheme.showToast("Refreshed " + tse.availableSounds.size() + " sounds");
+                    rebuildContent();
+                })
                 .dimensions(btnRight - 102, cursorY, 54, 18).build());
         add(FlatButton.builder(Component.literal("+ Category"), b -> {
                     tse.pushUndo();
                     tse.config.chatCategories.add(new ModConfig.ChatCategory("New Category"));
                     tse.saveConfig();
+                    MCTheme.showToast("Chat category created");
                     rebuildContent();
                 })
                 .dimensions(btnRight - 178, cursorY, 72, 18)
@@ -446,6 +504,7 @@ public class TSEScreen extends Screen {
                     cat.rules.add(new ModConfig.ChatRule());
                     cat.collapsed = false;
                     tse.saveConfig();
+                    MCTheme.showToast("Added new chat trigger");
                     rebuildContent();
                 })
                 .dimensions(left + w - 128, cursorY + 4, 62, 18)
@@ -453,7 +512,11 @@ public class TSEScreen extends Screen {
                 .build());
 
         add(deleteButton(left + w - 62, cursorY + 4, 56, 18, () -> {
-            tse.pushUndo(); tse.config.chatCategories.remove(cat); tse.saveConfig(); rebuildContent();
+            tse.pushUndo();
+            tse.config.chatCategories.remove(cat);
+            tse.saveConfig();
+            MCTheme.showToast("Category deleted");
+            rebuildContent();
         }));
 
         cursorY += h + 4;
@@ -477,7 +540,7 @@ public class TSEScreen extends Screen {
                 .style(FlatButton.Style.GHOST)
                 .build());
 
-        add(new ToggleWidget(left + 20, rowY + 3, rule.enabled, v -> { rule.enabled = v; tse.saveConfig(); }));
+        add(new ToggleWidget(left + 20, rowY + 3, rule.enabled, v -> { rule.enabled = v; tse.saveConfig(); rebuildContent(); }));
         int x = left + 20 + ToggleWidget.W + 6;
         EditBox kw = new FlatTextField(font, x, rowY, 180, 18, Component.literal("Keyword"));
         kw.setValue(rule.messageKeyword);
@@ -486,7 +549,11 @@ public class TSEScreen extends Screen {
         add(kw);
 
         add(deleteButton(left + innerW - 50, rowY, 50, 18, () -> {
-            tse.pushUndo(); cat.rules.remove(rule); tse.saveConfig(); rebuildContent();
+            tse.pushUndo();
+            cat.rules.remove(rule);
+            tse.saveConfig();
+            MCTheme.showToast("Trigger deleted");
+            rebuildContent();
         }));
 
         if (rule.collapsed) {
@@ -621,7 +688,10 @@ public class TSEScreen extends Screen {
         addSection("Master Toggle");
         addCard(contentX, cursorY, contentW, 28, MCTheme.CARD_FILL, MCTheme.CARD_BORDER, tse.config.masterEnabled);
         add(new ToggleWidget(left, cursorY + 8, tse.config.masterEnabled, v -> {
-            tse.config.masterEnabled = v; tse.saveConfig(); rebuildContent();
+            tse.config.masterEnabled = v;
+            tse.saveConfig();
+            MCTheme.showToast(v ? "TSE Enabled" : "TSE Disabled");
+            rebuildContent();
         }));
         addLabel(left + 32, cursorY + 10, tse.config.masterEnabled ? "Mod is ENABLED" : "Mod is DISABLED");
         cursorY += 34;
@@ -630,26 +700,51 @@ public class TSEScreen extends Screen {
         addCard(contentX, cursorY, contentW, 34, MCTheme.CARD_FILL, MCTheme.CARD_BORDER, false);
         String[] names = MCTheme.THEME_NAMES;
         int curIdx = 0;
-        for (int i = 0; i < names.length; i++) if (names[i].equals(tse.config.theme)) { curIdx = i; break; }
-        add(new CycleButton(left, cursorY + 8, 160, 18, Arrays.asList(names), curIdx, i -> {
+        for (int i = 0; i < names.length; i++) if (names[i].equalsIgnoreCase(tse.config.theme)) { curIdx = i; break; }
+        add(new CycleButton(left, cursorY + 8, 130, 18, Arrays.asList(names), curIdx, i -> {
             tse.config.theme = names[i];
             MCTheme.applyTheme(tse.config.theme);
             tse.saveConfig();
+            MCTheme.showToast("Theme: " + names[i]);
         }));
+        add(FlatButton.builder(Component.literal("Custom Color..."), b ->
+                        Minecraft.getInstance().gui.setScreen(new ColorPickerScreen(this, MCTheme.accent(), c -> {
+                            tse.config.customThemeColor = c;
+                            tse.config.theme = "Custom";
+                            MCTheme.setCustomAccent(c);
+                            tse.saveConfig();
+                        })))
+                .dimensions(left + 138, cursorY + 8, 108, 18)
+                .style(FlatButton.Style.ACCENT)
+                .build());
         add(FlatButton.builder(Component.literal("Edit HUD Positions..."), b ->
                         Minecraft.getInstance().gui.setScreen(new TSEHudEditorScreen(this, null)))
-                .dimensions(left + 170, cursorY + 8, 130, 18)
-                .style(FlatButton.Style.ACCENT)
+                .dimensions(left + 254, cursorY + 8, 130, 18)
                 .build());
         cursorY += 40;
 
         addSection("Utilities");
         addCard(contentX, cursorY, contentW, 34, MCTheme.CARD_FILL, MCTheme.CARD_BORDER, false);
-        add(FlatButton.builder(Component.literal("Undo"), b -> { tse.undo(); rebuildContent(); })
+        add(FlatButton.builder(Component.literal("Undo"), b -> {
+                    if (tse.undo()) {
+                        tse.saveConfig();
+                        MCTheme.showToast("Undo applied");
+                    } else {
+                        MCTheme.showToast("Nothing to undo");
+                    }
+                    rebuildContent();
+                })
                 .dimensions(left, cursorY + 8, 64, 18).build());
-        add(FlatButton.builder(Component.literal("Save Config"), b -> tse.saveConfig())
+        add(FlatButton.builder(Component.literal("Save Config"), b -> {
+                    tse.saveConfig();
+                    MCTheme.showToast("Configuration saved");
+                })
                 .dimensions(left + 70, cursorY + 8, 90, 18).build());
-        add(FlatButton.builder(Component.literal("Refresh Sounds"), b -> { tse.refreshAvailableSounds(); rebuildContent(); })
+        add(FlatButton.builder(Component.literal("Refresh Sounds"), b -> {
+                    tse.refreshAvailableSounds();
+                    MCTheme.showToast("Refreshed " + tse.availableSounds.size() + " sounds");
+                    rebuildContent();
+                })
                 .dimensions(left + 166, cursorY + 8, 110, 18).build());
         add(FlatButton.builder(Component.literal("Open Sounds Folder"), b -> {
                     try { new ProcessBuilder("explorer.exe", tse.SOUNDS_DIR.getAbsolutePath()).start(); }
@@ -660,7 +755,10 @@ public class TSEScreen extends Screen {
 
         addSection("Developer");
         addCard(contentX, cursorY, contentW, 34, MCTheme.CARD_FILL, MCTheme.CARD_BORDER, false);
-        add(FlatButton.builder(Component.literal("Run Audio Debug"), b -> tse.runAudioDebug())
+        add(FlatButton.builder(Component.literal("Run Audio Debug"), b -> {
+                    MCTheme.showToast("Running audio diagnostic...");
+                    tse.runAudioDebug();
+                })
                 .dimensions(left, cursorY + 8, 130, 18).build());
         cursorY += 40;
     }
@@ -674,8 +772,9 @@ public class TSEScreen extends Screen {
         newProfileName.setWidth(210);
         add(newProfileName);
         add(FlatButton.builder(Component.literal("Save Current as Profile"), b -> {
-                    ProfileManager.INSTANCE.createProfile(newProfileName.getValue(), tse.config);
+                    ProfileManager.Profile created = ProfileManager.INSTANCE.createProfile(newProfileName.getValue(), tse.config);
                     newProfileName.setValue("");
+                    MCTheme.showToast("Saved profile '" + created.name + "'");
                     rebuildContent();
                 })
                 .dimensions(left + 218, cursorY, 150, 18)
@@ -696,6 +795,7 @@ public class TSEScreen extends Screen {
 
             add(FlatButton.builder(Component.literal("Load"), b -> {
                         ProfileManager.INSTANCE.applyProfile(profile, tse.config);
+                        MCTheme.showToast("Loaded profile '" + profile.name + "'");
                         rebuildContent();
                     })
                     .dimensions(left + contentW - 124, cursorY + 5, 56, 18)
@@ -703,14 +803,17 @@ public class TSEScreen extends Screen {
                     .build());
             add(deleteButton(left + contentW - 62, cursorY + 5, 56, 18, () -> {
                 ProfileManager.INSTANCE.deleteProfile(profile);
+                MCTheme.showToast("Deleted profile '" + profile.name + "'");
                 rebuildContent();
             }));
-            profileLabels.add(new String[]{profile.name, String.valueOf(cursorY)});
+            profileLabels.add(profile.name);
+            profileLabelPositions.add(new int[]{cursorY});
             cursorY += cardH + 5;
         }
     }
 
-    private final List<String[]> profileLabels = new ArrayList<>();
+    private final List<String> profileLabels = new ArrayList<>();
+    private final List<int[]> profileLabelPositions = new ArrayList<>();
 
     private AbstractWidget deleteButton(int x, int y, int w, int h, Runnable action) {
         return FlatButton.builder(Component.literal("Delete"), b -> action.run())
@@ -777,6 +880,8 @@ public class TSEScreen extends Screen {
 
     @Override
     public void extractRenderState(GuiGraphicsExtractor context, int mouseX, int mouseY, float delta) {
+        int maxScroll = Math.max(0, contentTotalHeight - contentH);
+
         context.fill(0, 0, width, height, 0x80000000);
         MCTheme.fillRoundedCard(context, winX, winY, winW, winH, 12, MCTheme.WINDOW_BG, MCTheme.CARD_BORDER);
 
@@ -799,26 +904,30 @@ public class TSEScreen extends Screen {
         }
 
         for (Object[] s : sectionLabels) {
-            String title = (String) s[0];
             int y = (int) s[1];
+            if (y + 14 < contentY || y > contentY + contentH) continue;
+            String title = (String) s[0];
             MCTheme.drawTextHD(context, font, title, contentX + 2, y, MCTheme.accent(255), false);
             context.fill(contentX + 2, y + 11, contentX + contentW, y + 12, MCTheme.BORDER);
         }
         for (Object[] l : inlineLabels) {
-            MCTheme.drawTextHD(context, font, (String) l[0], (int) l[1], (int) l[2], MCTheme.TEXT_DIM, false);
+            int y = (int) l[2];
+            if (y + 12 < contentY || y > contentY + contentH) continue;
+            MCTheme.drawTextHD(context, font, (String) l[0], (int) l[1], y, MCTheme.TEXT_DIM, false);
         }
-        for (String[] p : profileLabels) {
-            int y = Integer.parseInt(p[1]);
-            MCTheme.drawTextHD(context, font, p[0], contentX + 10, y + 10, MCTheme.TEXT, false);
+        for (int i = 0; i < profileLabels.size(); i++) {
+            int y = profileLabelPositions.get(i)[0];
+            if (y + 28 < contentY || y > contentY + contentH) continue;
+            MCTheme.drawTextHD(context, font, profileLabels.get(i), contentX + 10, y + 10, MCTheme.TEXT, false);
         }
 
         for (AbstractWidget w : contentWidgets) {
+            if (w.getY() + w.getHeight() < contentY - 14 || w.getY() - 14 > contentY + contentH) continue;
             w.extractRenderState(context, mouseX, mouseY, delta);
         }
         context.disableScissor();
 
         if (contentTotalHeight > contentH) {
-            int maxScroll = contentTotalHeight - contentH;
             int barX = winX + winW - 5;
             int thumbH = Math.max(20, (int) ((contentH / (float) contentTotalHeight) * contentH));
             int thumbY = contentY + (int) ((scrollOffset / (float) maxScroll) * (contentH - thumbH));
@@ -839,6 +948,8 @@ public class TSEScreen extends Screen {
             context.centeredText(font, "Press a key or mouse button to bind (Esc to cancel)...",
                     winX + winW / 2, winY + winH - 14, 0xFFFFAA33);
         }
+
+        MCTheme.renderToasts(context, font, width, height);
     }
 
     @Override
@@ -853,6 +964,7 @@ public class TSEScreen extends Screen {
                 tse.pushUndo();
                 capturingRule.keybind = new String[]{"LEFT_CLICK", "RIGHT_CLICK", "MIDDLE_CLICK"}[button];
                 tse.saveConfig();
+                MCTheme.showToast("Bound to " + fmtKey(capturingRule.keybind));
             }
             capturingRule = null;
             rebuildContent();
@@ -913,8 +1025,12 @@ public class TSEScreen extends Screen {
         if (mouseX >= contentX && mouseX <= contentX + contentW
                 && mouseY >= contentY && mouseY <= contentY + contentH) {
             int maxScroll = Math.max(0, contentTotalHeight - contentH);
-            scrollOffset = Math.max(0, Math.min(maxScroll, scrollOffset - (int) (verticalAmount * 18)));
-            rebuildContent();
+            int nextScroll = Math.max(0, Math.min(maxScroll, scrollOffset - (int) Math.round(verticalAmount * 22.0)));
+            if (nextScroll != scrollOffset) {
+                int dy = scrollOffset - nextScroll;
+                scrollOffset = nextScroll;
+                shiftScrollElements(dy);
+            }
             return true;
         }
         return super.mouseScrolled(mouseX, mouseY, horizontalAmount, verticalAmount);
@@ -932,10 +1048,18 @@ public class TSEScreen extends Screen {
             tse.pushUndo();
             capturingRule.keybind = "KEY_" + keyCode;
             tse.saveConfig();
+            MCTheme.showToast("Bound to " + fmtKey(capturingRule.keybind));
             capturingRule = null;
             rebuildContent();
             return true;
         }
+
+        for (AbstractWidget w : contentWidgets) {
+            if (w instanceof CycleButton cb && cb.isOpen()) {
+                return cb.keyPressed(input);
+            }
+        }
+
         if (focusedContent != null) {
             boolean handled = focusedContent.keyPressed(input);
             if (keyCode == GLFW.GLFW_KEY_ENTER || keyCode == GLFW.GLFW_KEY_KP_ENTER) {
@@ -952,6 +1076,11 @@ public class TSEScreen extends Screen {
 
     @Override
     public boolean charTyped(CharacterEvent input) {
+        for (AbstractWidget w : contentWidgets) {
+            if (w instanceof CycleButton cb && cb.isOpen()) {
+                return cb.charTyped(input);
+            }
+        }
         if (focusedContent != null && focusedContent.charTyped(input)) return true;
         return super.charTyped(input);
     }

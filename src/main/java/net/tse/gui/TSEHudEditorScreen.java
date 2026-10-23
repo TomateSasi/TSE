@@ -26,6 +26,7 @@ public class TSEHudEditorScreen extends Screen {
 
     private static class HudBox {
         final String title;
+        final boolean isTimerPill;
         final java.util.function.Supplier<String> textSupplier;
         final java.util.function.IntSupplier colorSupplier;
         final java.util.function.IntSupplier xGetter;
@@ -33,10 +34,12 @@ public class TSEHudEditorScreen extends Screen {
         final java.util.function.Supplier<Float> scaleGetter;
         final java.util.function.BiConsumer<Integer, Integer> posSetter;
         final java.util.function.Consumer<Float> scaleSetter;
+        final int defaultX;
         final int defaultY;
         final float defaultScale;
 
         HudBox(String title,
+               boolean isTimerPill,
                java.util.function.Supplier<String> textSupplier,
                java.util.function.IntSupplier colorSupplier,
                java.util.function.IntSupplier xGetter,
@@ -44,9 +47,11 @@ public class TSEHudEditorScreen extends Screen {
                java.util.function.Supplier<Float> scaleGetter,
                java.util.function.BiConsumer<Integer, Integer> posSetter,
                java.util.function.Consumer<Float> scaleSetter,
+               int defaultX,
                int defaultY,
                float defaultScale) {
             this.title = title;
+            this.isTimerPill = isTimerPill;
             this.textSupplier = textSupplier;
             this.colorSupplier = colorSupplier;
             this.xGetter = xGetter;
@@ -54,6 +59,7 @@ public class TSEHudEditorScreen extends Screen {
             this.scaleGetter = scaleGetter;
             this.posSetter = posSetter;
             this.scaleSetter = scaleSetter;
+            this.defaultX = defaultX;
             this.defaultY = defaultY;
             this.defaultScale = defaultScale;
         }
@@ -77,7 +83,21 @@ public class TSEHudEditorScreen extends Screen {
         ModConfig.VoidgloomSettings vg = tse.config.voidgloom;
 
         boxes.add(new HudBox(
+                "Cooldown Timer HUD",
+                true,
+                () -> "4s | Hyperion",
+                () -> 0xFF66EE88,
+                () -> tse.config.timerHudX,
+                () -> tse.config.timerHudY,
+                () -> tse.config.timerHudScale,
+                (x, y) -> { tse.config.timerHudX = x; tse.config.timerHudY = y; },
+                s -> tse.config.timerHudScale = s,
+                10, 20, 1.0f
+        ));
+
+        boxes.add(new HudBox(
                 "Voidgloom Overlay",
+                false,
                 () -> vg.overlayText == null || vg.overlayText.isEmpty() ? "&cSNEAK!" : vg.overlayText,
                 () -> vg.overlayColor,
                 () -> vg.overlayX,
@@ -85,13 +105,14 @@ public class TSEHudEditorScreen extends Screen {
                 () -> vg.overlayScale,
                 (x, y) -> { vg.overlayX = x; vg.overlayY = y; },
                 s -> vg.overlayScale = s,
-                80, 2.0f
+                -1, 80, 2.0f
         ));
 
         if (targetRule != null) {
             String name = targetRule.itemKeyword.isEmpty() ? "Rule" : targetRule.itemKeyword;
             boxes.add(new HudBox(
                     "Trigger Overlay (" + name + ")",
+                    false,
                     () -> targetRule.overlayText == null || targetRule.overlayText.isEmpty() ? "NOW!" : targetRule.overlayText,
                     () -> targetRule.overlayColor,
                     () -> targetRule.overlayX,
@@ -99,10 +120,11 @@ public class TSEHudEditorScreen extends Screen {
                     () -> targetRule.overlayScale,
                     (x, y) -> { targetRule.overlayX = x; targetRule.overlayY = y; },
                     s -> targetRule.overlayScale = s,
-                    80, 2.0f
+                    -1, 80, 2.0f
             ));
             boxes.add(new HudBox(
                     "Close Warning (" + name + ")",
+                    false,
                     () -> targetRule.closeWarnText == null || targetRule.closeWarnText.isEmpty() ? "GET READY!" : targetRule.closeWarnText,
                     () -> targetRule.closeWarnColor,
                     () -> targetRule.closeWarnX,
@@ -110,12 +132,12 @@ public class TSEHudEditorScreen extends Screen {
                     () -> targetRule.closeWarnScale,
                     (x, y) -> { targetRule.closeWarnX = x; targetRule.closeWarnY = y; },
                     s -> targetRule.closeWarnScale = s,
-                    60, 1.5f
+                    -1, 60, 1.5f
             ));
         }
 
         if (!boxes.isEmpty() && selected == null) {
-            selected = targetRule != null && boxes.size() > 1 ? boxes.get(1) : boxes.get(0);
+            selected = targetRule != null && boxes.size() > 2 ? boxes.get(2) : boxes.get(0);
         }
     }
 
@@ -126,8 +148,10 @@ public class TSEHudEditorScreen extends Screen {
     private int[] computeBounds(HudBox box) {
         float scale = box.scaleGetter.get();
         String text = cleanText(box.textSupplier.get());
-        int textW = Math.max(16, (int) (font.width(text) * scale));
-        int textH = Math.max(8, (int) (font.lineHeight * scale));
+        int unscaledW = box.isTimerPill ? (font.width(text) + 14) : font.width(text);
+        int unscaledH = box.isTimerPill ? 18 : font.lineHeight;
+        int textW = Math.max(16, (int) (unscaledW * scale));
+        int textH = Math.max(8, (int) (unscaledH * scale));
         int rawX = box.xGetter.getAsInt();
         int x = rawX < 0 ? (width - textW) / 2 : rawX;
         int y = box.yGetter.getAsInt();
@@ -154,8 +178,14 @@ public class TSEHudEditorScreen extends Screen {
             int border = isSel ? MCTheme.accent(230) : (isHov ? MCTheme.accent(120) : MCTheme.CARD_BORDER);
             MCTheme.fillRoundedCard(context, bx - HIT_PAD, by - HIT_PAD, bw + HIT_PAD * 2, bh + HIT_PAD * 2, 4, fill, border);
 
-            tse.drawHudText(context, Minecraft.getInstance(), box.textSupplier.get(),
-                    box.xGetter.getAsInt(), box.yGetter.getAsInt(), box.scaleGetter.get(), box.colorSupplier.getAsInt(), width);
+            if (box.isTimerPill) {
+                tse.drawTimerHudPill(context, Minecraft.getInstance(), box.textSupplier.get(),
+                        0.65f, box.colorSupplier.getAsInt(), box.xGetter.getAsInt(), box.yGetter.getAsInt(),
+                        box.scaleGetter.get(), width);
+            } else {
+                tse.drawHudText(context, Minecraft.getInstance(), box.textSupplier.get(),
+                        box.xGetter.getAsInt(), box.yGetter.getAsInt(), box.scaleGetter.get(), box.colorSupplier.getAsInt(), width);
+            }
 
             if (isSel || isHov) {
                 String tag = box.title + (box.xGetter.getAsInt() < 0 ? " [Centered]" : "");
@@ -169,6 +199,7 @@ public class TSEHudEditorScreen extends Screen {
 
         drawLegend(context);
         super.extractRenderState(context, mouseX, mouseY, delta);
+        MCTheme.renderToasts(context, font, width, height);
     }
 
     private void drawLegend(GuiGraphicsExtractor context) {
@@ -302,12 +333,14 @@ public class TSEHudEditorScreen extends Screen {
                 case GLFW.GLFW_KEY_C -> {
                     selected.posSetter.accept(-1, curY);
                     tse.saveConfig();
+                    MCTheme.showToast("Centered " + selected.title);
                     return true;
                 }
                 case GLFW.GLFW_KEY_R -> {
-                    selected.posSetter.accept(-1, selected.defaultY);
+                    selected.posSetter.accept(selected.defaultX, selected.defaultY);
                     selected.scaleSetter.accept(selected.defaultScale);
                     tse.saveConfig();
+                    MCTheme.showToast("Reset " + selected.title);
                     return true;
                 }
             }
